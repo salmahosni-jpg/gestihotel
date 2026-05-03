@@ -1,0 +1,263 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// ================= STRUCTURES =================
+
+typedef struct Client {
+    int id;
+    char nom[50];
+    char prenom[50];
+    struct Client *suivant;
+} Client;
+
+typedef struct Chambre {
+    int numero;
+    char type[20];
+    float prix;
+    int disponible;  // 1 = libre, 0 = occupée
+    struct Chambre *suivant;
+} Chambre;
+
+typedef struct Reservation {
+    int id;
+    int idClient;
+    int numeroChambre;
+    char arrivee[11];
+    char depart[11];
+    int nuits;
+    float total;
+    int statut; // 0 = en cours, 1 = terminée
+    struct Reservation *suivant;
+} Reservation;
+
+// ================= OUTILS =================
+
+void viderBuffer() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
+// ================= INITIALISATION =================
+
+Chambre* initChambres() {
+    int nums[] = {101, 102, 103, 201, 202, 203};
+    char types[][20] = {"simple", "double", "double", "suite", "simple", "suite"};
+    float prix[] = {50, 80, 80, 150, 55, 200};
+
+    Chambre *tete = NULL, *courant = NULL;
+
+    for(int i = 0; i < 6; i++) {
+        Chambre *n = (Chambre*)malloc(sizeof(Chambre));
+        n->numero = nums[i];
+        strcpy(n->type, types[i]);
+        n->prix = prix[i];
+        n->disponible = 1;  // Toutes les chambres sont libres au départ
+        n->suivant = NULL;
+
+        if(!tete) {
+            tete = courant = n;
+        } else {
+            courant->suivant = n;
+            courant = n;
+        }
+    }
+    return tete;
+}
+
+// ================= RECHERCHE =================
+
+Client* chercherClient(Client *c, int id) {
+    while(c) {
+        if(c->id == id) return c;
+        c = c->suivant;
+    }
+    return NULL;
+}
+
+Chambre* chercherChambre(Chambre *ch, int num) {
+    while(ch) {
+        if(ch->numero == num) return ch;
+        ch = ch->suivant;
+    }
+    return NULL;
+}
+
+// ================= CLIENT =================
+
+void ajouterClient(Client **tete) {
+    Client *n = (Client*)malloc(sizeof(Client));
+
+    int max = 0;
+    Client *c = *tete;
+    while(c) {
+        if(c->id > max) max = c->id;
+        c = c->suivant;
+    }
+
+    n->id = max + 1;
+
+    printf("Nom: ");
+    viderBuffer();
+    fgets(n->nom, 50, stdin);
+    n->nom[strcspn(n->nom, "\n")] = 0;
+
+    printf("Prenom: ");
+    fgets(n->prenom, 50, stdin);
+    n->prenom[strcspn(n->prenom, "\n")] = 0;
+
+    n->suivant = *tete;
+    *tete = n;
+
+    printf("Client ajouté ID=%d\n", n->id);
+}
+
+void afficherClients(Client *tete) {
+    if(!tete) {
+        printf("Aucun client\n");
+        return;
+    }
+    
+    printf("\n=== LISTE DES CLIENTS ===\n");
+    Client *c = tete;
+    while(c) {
+        printf("ID: %d | %s %s\n", c->id, c->prenom, c->nom);
+        c = c->suivant;
+    }
+}
+// ================= DEPART =================
+
+void depart(Reservation **res, Client *clients, Chambre *chambres) {
+    int id;
+    printf("\n=== DEPART CLIENT ===\n");
+    printf("ID reservation: ");
+    scanf("%d", &id);
+
+    Reservation *r = *res;
+    while(r) {
+        if(r->id == id && r->statut == 0) {
+            Client *cl = chercherClient(clients, r->idClient);
+            Chambre *chb = chercherChambre(chambres, r->numeroChambre);
+
+            printf("\n====================================\n");
+            printf("            FACTURE\n");
+            printf("====================================\n");
+            printf("Client : %s %s\n", cl->prenom, cl->nom);
+            printf("Chambre : %d (%s)\n", r->numeroChambre, chb->type);
+            printf("Arrivee : %s\n", r->arrivee);
+            printf("Depart : %s\n", r->depart);
+            printf("Nuits : %d\n", r->nuits);
+            printf("Prix par nuit : %.2f €\n", chb->prix);
+            printf("------------------------------------\n");
+            printf("TOTAL A PAYER : %.2f €\n", r->total);
+            printf("====================================\n");
+
+            r->statut = 1;
+            chb->disponible = 1;  // Libérer la chambre
+
+            printf("\n✅ Depart enregistre. Merci !\n");
+            return;
+        }
+        r = r->suivant;
+    }
+    printf("❌ Reservation introuvable ou deja terminee\n");
+}
+
+// ================= ETAT CHAMBRES =================
+
+void afficherEtatComplet(Chambre *ch, Reservation *r) {
+    printf("\n====================================\n");
+    printf("    ETAT COMPLET DES CHAMBRES\n");
+    printf("====================================\n");
+    
+    while(ch) {
+        int occupee = 0;
+        Reservation *tmp = r;
+        while(tmp) {
+            if(tmp->numeroChambre == ch->numero && tmp->statut == 0) {
+                occupee = 1;
+                break;
+            }
+            tmp = tmp->suivant;
+        }
+        
+        printf("Chambre %d (%s) : ", ch->numero, ch->type);
+        if(occupee) {
+            printf("❌ OCCUPEE\n");
+        } else if(ch->disponible) {
+            printf("✅ LIBRE\n");
+        } else {
+            printf("⚠️ INDISPONIBLE\n");
+        }
+        
+        ch = ch->suivant;
+    }
+    printf("====================================\n");
+}
+
+// ================= MAIN =================
+
+int main() {
+    // Pour Windows
+    system("chcp 65001 > nul");
+    
+    Client *clients = NULL;
+    Chambre *chambres = initChambres();
+    Reservation *reservations = NULL;
+    
+    int choix;
+    
+    do {
+        printf("\n+------------------------------------+\n");
+        printf("|         MENU PRINCIPAL             |\n");
+        printf("+------------------------------------+\n");
+        printf("| 1. Nouvelle reservation            |\n");
+        printf("| 2. Depart / Facturation            |\n");
+        printf("| 3. Voir chambres disponibles       |\n");
+        printf("| 4. Voir etat complet des chambres  |\n");
+        printf("| 5. Gestion clients                 |\n");
+        printf("| 0. Quitter                         |\n");
+        printf("+------------------------------------+\n");
+        printf("Choix: ");
+        scanf("%d", &choix);
+        
+        switch(choix) {
+            case 1: 
+                creerReservation(&clients, chambres, &reservations); 
+                break;
+            case 2: 
+                depart(&reservations, clients, chambres); 
+                break;
+            case 3: 
+                afficherChambresDispo(chambres, reservations); 
+                break;
+            case 4: 
+                afficherEtatComplet(chambres, reservations); 
+                break;
+            case 5:
+                printf("\n1. Ajouter client\n2. Afficher clients\nChoix: ");
+                int choixClient;
+                scanf("%d", &choixClient);
+                if(choixClient == 1) ajouterClient(&clients);
+                else if(choixClient == 2) afficherClients(clients);
+                break;
+            case 0: 
+                printf("\nAu revoir !\n"); 
+                break;
+            default: 
+                printf("Choix invalide\n");
+        }
+        
+        if(choix != 0) {
+            printf("\nAppuyez sur Entree pour continuer...");
+            viderBuffer();
+            getchar();
+        }
+        
+    } while(choix != 0);
+    
+    // Libération de la mémoire (optionnel mais propre)
+    // ... (code de libération si nécessaire)
+    
+    return 0;
+}
